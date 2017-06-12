@@ -1,0 +1,4 @@
+SQLAlchemy==1.1.10
+psycopg2==2.7.1
+boto3==1.4.4
+zappa==0.42.0
