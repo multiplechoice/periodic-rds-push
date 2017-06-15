@@ -15,10 +15,10 @@ To use simply call the script with three arguments:
 """
 
 import argparse
-import datetime
+from contextlib import contextmanager
 
-from sqlalchemy import Column, Text, DateTime, create_engine
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, Text, create_engine, event
+from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import func
@@ -26,13 +26,40 @@ from sqlalchemy.sql import func
 Base = declarative_base()
 
 
-class JobsTable(Base):
+class ScrapedJob(Base):
     __tablename__ = 'scraped-jobs'
-    id = Column(UUID, server_default=func.gen_random_uuid(), primary_key=True)
-    url = Column(Text, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
-    last_modified = Column(DateTime, nullable=False)
+    id = Column(UUID, server_default=func.gen_random_uuid())
+    url = Column(Text, nullable=False, primary_key=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    last_modified = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     data = Column(JSONB, nullable=False)
+
+    def __repr__(self):
+        return '<Job created_at: {self.created_at}' \
+               ' last_modified: {self.last_modified}' \
+               ' url: {self.url!r}' \
+               '>'.format(self=self)
+
+
+@event.listens_for(ScrapedJob, 'before_update', propagate=True)
+def update_last_modified_timestamp(mapper, connection, row):
+    # updates the value of the `last_modified` column when we're doing an UPDATE
+    row.last_modified = func.now()
+
+
+@contextmanager
+def session_scope(credentials):
+    """Provide a transactional scope around a series of operations."""
+    engine = create_engine(credentials)
+    session = sessionmaker(bind=engine)()
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def install_pgcrypto(db_connection):
@@ -60,11 +87,10 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--password', dest='password')
     arguments = parser.parse_args()
 
-    engine = create_engine(arguments.credentials, echo=True)
-    session = sessionmaker(bind=engine)()
-    connection = session.bind
+    with session_scope(arguments.credentials) as session:
+        connection = session.bind
 
-    install_pgcrypto(connection)
-    create_table(connection)
-    create_user(arguments.username, arguments.password, connection)
-    alter_table_owner(arguments.username, JobsTable.__tablename__, connection)
+        install_pgcrypto(connection)
+        create_table(connection)
+        create_user(arguments.username, arguments.password, connection)
+        alter_table_owner(arguments.username, ScrapedJob.__tablename__, connection)
