@@ -17,6 +17,7 @@ To use simply call the script with three arguments:
 import argparse
 from contextlib import contextmanager
 
+import dateutil.parser
 from sqlalchemy import Column, Text, create_engine, event
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.ext.declarative import declarative_base
@@ -39,6 +40,16 @@ class ScrapedJob(Base):
                ' last_modified: {self.last_modified}' \
                ' url: {self.url!r}' \
                '>'.format(self=self)
+
+    @classmethod
+    def from_dict(cls, input_dict):
+        instance = cls()
+        if 'url' in input_dict:
+            instance.url = input_dict['url']
+        if 'posted' in input_dict:
+            instance.created_at = dateutil.parser.parse(input_dict['posted'])
+        instance.data = input_dict
+        return instance
 
 
 @event.listens_for(ScrapedJob, 'before_update', propagate=True)

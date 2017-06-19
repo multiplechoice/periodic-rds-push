@@ -1,0 +1,28 @@
+{
+    "dev": {
+        "apigateway_enabled": false,
+        "aws_region": "eu-central-1",
+        "s3_bucket": "zappa.periodic-rds-push",
+        "remote_env": "s3://zappa.periodic-rds-push/remote_env.json",
+        "events": [{
+            "function": "poll_sqs.main",
+            "expression": "rate(1 minute)"
+        }],
+        "vpc_config" : {
+            "SubnetIds": [
+                "subnet-b34237c9",
+                "subnet-1e092076",
+                "subnet-affbd0e5"
+            ],
+            "SecurityGroupIds": [ "sg-1c93fb77" ]
+        },
+        "extra_permissions": [{
+            "Effect": "Allow",
+            "Action": [
+                "sqs:*"
+            ],
+            "Resource": "*"
+        }],
+        "timeout_seconds": 90
+    }
+}
